@@ -1,10 +1,17 @@
 // Borrar repetidos ocupados en funciones.h y yearData.h
-#include <stdio.h>
-#include <stdlib.h>
+#include "funciones.h"
 #include <sys/types.h>
 #include <unistd.h>
 #include <getopt.h>
-#include <string.h>
+#include <pthread.h>
+
+// Datos Globales:
+//  Datos Compartidos
+FILE *input_file;     // Archivo de entrada
+YearData *years_data; // Estructura con la informacion de los anios
+pthread_mutex_t *mutexs_year_data;
+pthread_mutex_t mutex_file;
+int *threads_processed_lines;
 
 /*
     Entradas:
@@ -15,14 +22,13 @@
     Descripcion:
         -Imprime la informacion de uso referente al formato
         correcto para la ejecucion del programa.
-
 */
 void usage(FILE *fp, const char *path)
 {
     const char *basename = path + 2;
     fprintf(fp, "usage: %s [OPTION]\n", basename);
     fprintf(fp, "The following is the correct format for using the program:\t\t"
-                "\n'./lab2 -i input_file -o output_file -d year -p min_price -n num_workers -b'\n");
+                "\n'./lab3 -i input_file -o output_file -d year -p min_price -n num_threads -c chunk -b'\n");
     fprintf(fp, "  -h, --help\t\t"
                 "Print this help and exit.\n");
     fprintf(fp, "  -i, --input[=INPUTFILENAME]\t"
@@ -33,24 +39,70 @@ void usage(FILE *fp, const char *path)
                 "year required to start the search.\n");
     fprintf(fp, "  -p, --min[=MINPRICE]\t"
                 "Minimum price required to start the search.\n");
-    fprintf(fp, "  -n, --threads[=NUMWORKERS]\t"
+    fprintf(fp, "  -n, --threads[=NUMTHREADS]\t"
                 "Number of threads to create.\n");
-    fprintf(fp, "  -c, --chunk[=NUMWORKERS]\t"
+    fprintf(fp, "  -c, --chunk[=CHUNK]\t"
                 "Number of lines to read for chunk.\n");
     fprintf(fp, "  -b, --print[=PRINTFLAG]\t"
                 "print the data in the console.\n");
 }
 
+typedef struct
+{
+    int tid;
+    int chunk;
+    int initial_year;
+    float min_price;
+} t_data;
+
+void *daughterThread(void *arg)
+{
+    t_data *data = (t_data *)arg;
+    int eof = 0;
+    while (!eof)
+    {
+        char games_data[data->chunk][400];
+
+        pthread_mutex_lock(&mutex_file);
+        for (int i = 0; i < data->chunk; i++)
+        {
+            if (fgets(games_data[i], 400, input_file))
+            {
+                threads_processed_lines[data->tid]++;
+            }
+            else
+            {
+                strcpy(games_data[i], "");
+                eof = 1;
+            }
+        }
+        pthread_mutex_unlock(&mutex_file);
+
+        int year, index;
+        int num_years = 2022 - data->initial_year + 1;
+        for (int i = 0; i < data->chunk && strcmp("", games_data[i]) != 0; i++)
+        {
+            year = getYear(games_data[i]);
+            index = year % num_years;
+            pthread_mutex_lock(&mutexs_year_data[index]);
+            updateYearData(games_data[i], &years_data[index], data->min_price, data->initial_year);
+            pthread_mutex_unlock(&mutexs_year_data[index]);
+        }
+    }
+
+    return NULL;
+}
+
 int main(int argc, char *argv[])
 {
-    char s_num_threads[1000], s_year[6], s_min_price[10], s_chunk;
-    char s_print_flag = '0';
+    char s_num_threads[1000], s_year[6], s_min_price[10], s_chunk[6];
+    int print_flag = 0;
     int help_flag = 0;
     int num_threads = 0;
     int chunk = 0;
-    int opt, year = -1;
+    int opt, initial_year = -1;
     float min_price = -1;
-    char input_file[100], output_file[100];
+    char name_input_file[100], name_output_file[100];
 
     struct option longopts[] =
         {{"help", no_argument, &help_flag, 1},
@@ -67,14 +119,14 @@ int main(int argc, char *argv[])
         switch (opt)
         {
         case 'i': // Archivo de entrada
-            strcpy(input_file, optarg);
+            strcpy(name_input_file, optarg);
             break;
         case 'o': // Archivo de salida
-            strcpy(output_file, optarg);
+            strcpy(name_output_file, optarg);
             break;
         case 'd': // Año de inicio juego
             strcpy(s_year, optarg);
-            year = atoi(s_year);
+            initial_year = atoi(s_year);
             break;
         case 'p': // Precio minimo
             strcpy(s_min_price, optarg);
@@ -89,7 +141,7 @@ int main(int argc, char *argv[])
             chunk = atoi(s_chunk);
             break;
         case 'b': // flag para imprimir los datos por pantalla
-            s_print_flag = '1';
+            print_flag = 1;
             break;
         case 'h':
             usage(stdout, argv[0]);
@@ -106,21 +158,63 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (input_file == NULL || output_file == NULL || year < 0 || min_price < 0 || num_threads <= 0 || help_flag || chunk <= 0)
+    if (name_input_file == NULL || name_output_file == NULL || initial_year < 0 || min_price < 0 || num_threads <= 0 || help_flag || chunk <= 0)
     {
         // Entra si no se ingreso alguna opcion o valor necesario para
-        //   el funcionamiento del programa, ademas si se ingresa
-        //   la flag de ayuda.
+        //   el funcionamiento del programa, si se ingresa un valor no
+        //   valido, o si se ingresa la flag de ayuda.
         usage(stderr, argv[0]);
         exit(EXIT_FAILURE);
     }
 
-    if (access(input_file, 0) != 0)
+    if (access(name_input_file, 0) != 0)
     {
-        // Entra si el archivo de entrada no existe
+        // Entra si el archivo de entrada no existe.
         perror("Input file doesn't exist\n");
         exit(EXIT_FAILURE);
     }
 
-    
+    // Inicializacion de datos compartidos:
+    input_file = fopen(name_input_file, "r");
+    years_data = createYearsDataArray(initial_year);
+    threads_processed_lines = malloc(sizeof(int) * num_threads);
+
+    // Inicializacion de mutexs:
+    int num_years = 2022 - initial_year + 1;
+    mutexs_year_data = malloc(sizeof(pthread_mutex_t) * num_years);
+    for (int i = 0; i < num_years; i++)
+    {
+        pthread_mutex_init(&mutexs_year_data[i], NULL);
+    }
+
+    pthread_mutex_init(&mutex_file, NULL);
+
+    // Creacion de hebras:
+    pthread_t tid[num_threads];
+    t_data data;
+    data.chunk = chunk;
+    data.initial_year = initial_year;
+    data.min_price = min_price;
+
+    for (int i = 0; i < num_threads; i++)
+    {
+        data.tid = i;
+        threads_processed_lines[i] = 0;
+        pthread_create(&tid[i], NULL, &daughterThread, (void *)&data);
+    }
+
+    for (int i = 0; i < num_threads; i++)
+    {
+        pthread_join(tid[i], NULL); // Es posible que se tenga que cambiar por datos compartidos el numero de lineas leidas por hebra
+    }
+
+    // Salidas del programa:
+    writeOutputFile(name_output_file, years_data, initial_year);
+    if (print_flag)
+    {
+        printYearsData(years_data, initial_year);
+        printThreadsProcessedLines(threads_processed_lines, num_threads);
+    }
+
+    return 0;
 }

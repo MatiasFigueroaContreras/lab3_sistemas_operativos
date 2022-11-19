@@ -1,15 +1,17 @@
 #include "yearData.h"
 
-// Funciones hebra madre
-void generateThreads(int num_threads);
+// Funciones hebra madre:
 
-char *yearsDataToString(YearData **years_data);
+YearData *createYearsDataArray(int initial_year);
 
-void writeOutputFile(char *file_name, char *years_data);
+void writeOutputFile(char *file_name, YearData *years_data, int initial_year); // *years_data puede cambiar a **years_data
 
-// Funciones hebra hija
-void daughterThread();
+void printYearsData(YearData *years_data, int initial_year); // *years_data puede cambiar a **years_data
 
-int getYear(char *line);
+void printThreadsProcessedLines(int *processed_lines, int num_threads);
 
-void updateYearData(char *line, YearData *year_data); // SC | line (?
+// Funciones hebra hija:
+
+int getYear(char *game_data);
+
+void updateYearData(char *game_data, YearData *year_data, float min_price, int initial_year);
