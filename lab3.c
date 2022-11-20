@@ -58,29 +58,29 @@ typedef struct
 void *daughterThread(void *arg)
 {
     t_data *data = (t_data *)arg;
+    char games_data[data->chunk][400];
+    int year, index, num_games;
+    int num_years = 2022 - data->initial_year + 1;
     int eof = 0;
     while (!eof)
     {
-        char games_data[data->chunk][400];
-
+        num_games = 0;
         pthread_mutex_lock(&mutex_file);
-        for (int i = 0; i < data->chunk; i++)
+        for (int i = 0; i < data->chunk && !eof; i++)
         {
             if (fgets(games_data[i], 400, input_file))
             {
                 threads_processed_lines[data->tid]++;
+                num_games++;
             }
             else
             {
-                strcpy(games_data[i], "");
                 eof = 1;
             }
         }
         pthread_mutex_unlock(&mutex_file);
 
-        int year, index;
-        int num_years = 2022 - data->initial_year + 1;
-        for (int i = 0; i < data->chunk && strcmp("", games_data[i]) != 0; i++)
+        for (int i = 0; i < num_games; i++)
         {
             year = getYear(games_data[i]);
             index = year % num_years;
@@ -205,16 +205,17 @@ int main(int argc, char *argv[])
 
     for (int i = 0; i < num_threads; i++)
     {
-        pthread_join(tid[i], NULL); // Es posible que se tenga que cambiar por datos compartidos el numero de lineas leidas por hebra
+        pthread_join(tid[i], NULL);
     }
 
     // Salidas del programa:
+    fclose(input_file);
     writeOutputFile(name_output_file, years_data, initial_year);
     if (print_flag)
     {
         printYearsData(years_data, initial_year);
         printThreadsProcessedLines(threads_processed_lines, num_threads);
     }
-
+    
     return 0;
 }

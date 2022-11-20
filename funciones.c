@@ -25,6 +25,8 @@ YearData *createYearsDataArray(int initial_year)
         years_data[index].year = y;
         years_data[index].price_expensive_game = -1;
         years_data[index].price_cheap_game = 1000000;
+        strcpy(years_data[index].expensive_game, "");
+        strcpy(years_data[index].cheap_game, "");
     }
 
     return years_data;
@@ -112,12 +114,13 @@ void printThreadsProcessedLines(int *processed_lines, int num_threads)
 int getYear(char *game_data)
 {
     char game_data_copy[400];
+    char *saveptr;
     strcpy(game_data_copy, game_data);
     int year;
-    char *value = strtok(game_data_copy, ",");
+    char *value = strtok_r(game_data_copy, ",", &saveptr);
     for (int column = 0; column < 5; column++)
     {
-        value = strtok(NULL, ",");
+        value = strtok_r(NULL, ",", &saveptr);
     }
 
     year = atoi(value);
@@ -141,10 +144,11 @@ void updateYearData(char *game_data, YearData *year_data, float min_price, int i
     int year, in_windows = 0, in_mac = 0, in_linux = 0, is_free = 0;
     float price;
     char game_name[100];
+    char *saveptr;
 
     int column = 0;
-    char *value = strtok(game_data, ",");
-    while (value)
+    char *value = strtok_r(game_data, ",", &saveptr);
+    while (value != NULL)
     {
         switch (column)
         {
@@ -185,7 +189,7 @@ void updateYearData(char *game_data, YearData *year_data, float min_price, int i
             break;
         }
 
-        value = strtok(NULL, ",");
+        value = strtok_r(NULL, ",", &saveptr);
         column++;
     }
 
@@ -214,12 +218,12 @@ void updateYearData(char *game_data, YearData *year_data, float min_price, int i
             year_data->linux_games++;
         }
 
-        if (price > year_data->price_expensive_game)
+        if (!is_free && price > year_data->price_expensive_game)
         {
             year_data->price_expensive_game = price;
             strcpy(year_data->expensive_game, game_name);
         }
-        if (price < year_data->price_cheap_game)
+        if (!is_free && price < year_data->price_cheap_game)
         {
             year_data->price_cheap_game = price;
             strcpy(year_data->cheap_game, game_name);

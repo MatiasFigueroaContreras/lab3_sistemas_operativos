@@ -47,13 +47,28 @@ char *toString(YearData *info)
     strcat(string, "Año: ");
     strcat(string, year);
     strcat(string, "\nJuego mas caro: ");
-    strcat(string, info->expensive_game);
-    strcat(string, " ");
-    strcat(string, price_expensive_game);
+    if(strcmp(info->expensive_game, "") == 0)
+    {
+        strcat(string, "No hay, todos los juegos son gratis.");
+    }
+    else
+    {
+        strcat(string, info->expensive_game);
+        strcat(string, " ");
+        strcat(string, price_expensive_game);
+    }
+
     strcat(string, "\nJuego mas barato: ");
-    strcat(string, info->cheap_game);
-    strcat(string, " ");
-    strcat(string, price_cheap_game);
+    if (strcmp(info->cheap_game, "") == 0)
+    {
+        strcat(string, "No hay, todos los juegos son gratis.");
+    }
+    else
+    {
+        strcat(string, info->cheap_game);
+        strcat(string, " ");
+        strcat(string, price_cheap_game);
+    }
     strcat(string, "\nTotal de juegos: ");
     strcat(string, total_games);
     strcat(string, "\nPromedio de precios: ");
