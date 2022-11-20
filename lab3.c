@@ -47,6 +47,7 @@ void usage(FILE *fp, const char *path)
                 "print the data in the console.\n");
 }
 
+//estructura utilizada para el traspaso de parametros a las hebras hijas
 typedef struct
 {
     int tid;
@@ -54,6 +55,18 @@ typedef struct
     int initial_year;
     float min_price;
 } t_data;
+
+/*
+
+    Entradas:
+        - void *arg: Estructura con los datos de la hebra hija (t_data)
+    Salidas:
+        - void
+    Descripcion:
+        -Funcion destinada a ser ejecutada por las hebras hijas, utiliza mutex para que se ejecute una hebra a la vez
+        y esta actualice los datos de la estructura years_data.
+
+*/
 
 void *daughterThread(void *arg)
 {
@@ -92,6 +105,7 @@ void *daughterThread(void *arg)
 
     return NULL;
 }
+
 
 int main(int argc, char *argv[])
 {
