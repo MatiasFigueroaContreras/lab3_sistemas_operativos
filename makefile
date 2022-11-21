@@ -1,4 +1,4 @@
-FLAGS = -g -Wall
+FLAGS = -g -Wall -pthread
 
 all: clean lab3 run
 
